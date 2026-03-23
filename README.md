@@ -55,7 +55,7 @@ The design consists of the following modules:
 
 ## 📊 Simulation Waveform
 
-![Simulation Waveform](./router_tb.png)
+![Simulation Waveform](./router__tb.png)
 
 > The waveform demonstrates correct packet routing, FIFO behavior, valid signals, and output data flow across different channels.
 
