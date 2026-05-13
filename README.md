@@ -1,4 +1,3 @@
-
 # Reliable 1x3 NoC Router with Dual-Mode Data Integrity
 
 ## 📌 Overview
@@ -28,7 +27,18 @@ The design consists of the following modules:
 - **router_register.sv** → Data storage and forwarding  
 - **router_sync.sv** → Channel selection & synchronization  
 
+![Router Architecture](./router_architecture.png)
+> *High-level architectural block diagram of the 1x3 NoC Router.*
+
 👉 *Refer `router_top.sv` for complete design integration*
+
+---
+
+## 📦 Packet Format
+Data is transmitted using a structured packet format to ensure correct routing and payload integrity.
+
+![Packet Format](./packet_format.png)
+> *Structure of the data packet including header, payload, and parity/CRC bytes.*
 
 ---
 
@@ -39,6 +49,18 @@ The design consists of the following modules:
 4. Synchronization logic selects output channel  
 5. Packet transmitted to correct output port  
 6. CRC/Parity ensures data integrity  
+
+### FSM Control Logic
+The finite state machine governs the state transitions for packet reception, buffering, and transmission.
+
+![Router FSM](./router_fsm.png)
+> *State transition diagram for the router control logic.*
+
+### Error Detection (CRC)
+The router uses robust error detection mechanisms to validate packets before successful transmission.
+
+![Router CRC](./router_crc.png)
+> *Flowchart detailing the CRC error detection and validation process.*
 
 ---
 
