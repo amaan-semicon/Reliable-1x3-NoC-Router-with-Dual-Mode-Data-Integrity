@@ -36,7 +36,7 @@ module router_fsm (
         LOAD_PARITY        = 3'b100,
         FIFO_FULL_STATE    = 3'b101,
         CHECK_PARITY_ERROR = 3'b110,
-        LOAD_AFTER_FULL    = 3'b111  // <-- NEW STATE ADDED HERE
+        LOAD_AFTER_FULL    = 3'b111  
     } state_t;
 
     state_t present_state, next_state;
