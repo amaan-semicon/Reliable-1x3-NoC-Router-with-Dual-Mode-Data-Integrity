@@ -1,50 +1,28 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 23.03.2026 21:16:09
-// Design Name: 
-// Module Name: router_register
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
 
 module register_crc8 (
-    input  logic        clock,
-    input  logic        resetn,
-    input  logic        pkt_valid,
-    input  logic [7:0]  data_in,
-    input  logic        fifo_full,
-    input  logic        detect_add,
-    input  logic        ld_state,
-    input  logic        full_state,         // laf_state completely removed!
-    input  logic        lfd_state,
-    input  logic        rst_int_reg,
-    input  logic        parity_mode,        // 0: CRC-8 mode, 1: Parity mode
+    input  logic       clock,
+    input  logic       resetn,
+    input  logic       pkt_valid,
+    input  logic [7:0] data_in,
+    input  logic       fifo_full,
+    input  logic       detect_add,
+    input  logic       ld_state,
+    input  logic       full_state,
+    input  logic       laf_state,          // <-- ADDED THIS BACK FOR 8-STATE FSM
+    input  logic       lfd_state,
+    input  logic       rst_int_reg,
+    input  logic       parity_mode,        // 0: CRC-8 mode, 1: Parity mode
     
-    output logic [7:0]  dout,
-    output logic        err,
-    output logic        parity_done,
-    output logic        low_packet_valid,
-    output logic [7:0]  crc_out,            // Computed CRC value
-    output logic        error_corrected,    // Indicates error was corrected
-    output logic [7:0]  corrected_data      // Corrected data output
+    output logic [7:0] dout,
+    output logic       err,
+    output logic       parity_done,
+    output logic       low_packet_valid,
+    output logic [7:0] crc_out,            
+    output logic       error_corrected,    
+    output logic [7:0] corrected_data      
 );
 
-    // -------------------------------------------------------------------------
-    // INTERNAL REGISTERS (Using your exact names)
-    // -------------------------------------------------------------------------
     logic [7:0] full_state_byte;
     logic [7:0] header;
     logic [7:0] crc_value;
@@ -52,9 +30,7 @@ module register_crc8 (
     logic [7:0] received_crc;
     logic [7:0] lookup_index;
 
-    // -------------------------------------------------------------------------
-    // ZERO-LATENCY CRC-8 ARRAY (Named crc8_table as per your code)
-    // -------------------------------------------------------------------------
+    // CRC-8 Lookup Table (Same as your code)
     logic [7:0] crc8_table [0:255] = '{
         8'h00, 8'h07, 8'h0E, 8'h09, 8'h1C, 8'h1B, 8'h12, 8'h15,
         8'h38, 8'h3F, 8'h36, 8'h31, 8'h24, 8'h23, 8'h2A, 8'h2D,
@@ -91,7 +67,7 @@ module register_crc8 (
     };
 
     // -------------------------------------------------------------------------
-    // DOUT LOGIC (Adjusted since laf_state is gone)
+    // DOUT LOGIC (Now correctly uses laf_state)
     // -------------------------------------------------------------------------
     always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
@@ -107,8 +83,8 @@ module register_crc8 (
             else if (ld_state && !fifo_full) begin
                 dout <= data_in; 
             end
-            // Since laf_state is gone, we rely on full_state or ld_state recovering
-            else if (full_state) begin
+            else if (laf_state) begin
+                // When coming out of FULL, push the latched byte out!
                 dout <= full_state_byte; 
             end
         end
@@ -127,13 +103,14 @@ module register_crc8 (
                 header <= data_in;
             end
             if (ld_state && fifo_full) begin
+                // Catch the byte that was on the wire when FIFO got full
                 full_state_byte <= data_in;
             end
         end
     end
 
     // -------------------------------------------------------------------------
-    // CRC & PARITY CALCULATION (Using exact array index logic)
+    // CRC & PARITY CALCULATION (Now calculates for laf_state too)
     // -------------------------------------------------------------------------
     always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
@@ -155,6 +132,12 @@ module register_crc8 (
                 crc_value <= crc8_table[lookup_index];
                 internal_parity <= internal_parity ^ data_in;
             end
+            else if (laf_state) begin
+                // Update CRC with the byte we recovered from FULL state!
+                lookup_index = crc_value ^ full_state_byte;
+                crc_value <= crc8_table[lookup_index];
+                internal_parity <= internal_parity ^ full_state_byte;
+            end
         end
     end
 
@@ -168,16 +151,14 @@ module register_crc8 (
             received_crc <= 8'h00;
         end
         else begin
-            // low_packet_valid
             if (rst_int_reg || detect_add) low_packet_valid <= 1'b0;
             else if (ld_state && !pkt_valid) low_packet_valid <= 1'b1;
 
-            // parity_done (Removed laf_state condition)
             if (detect_add) parity_done <= 1'b0;
-            else if ((ld_state && !pkt_valid && !fifo_full) || (full_state && low_packet_valid && !parity_done)) 
+            // Includes laf_state condition to finish parity check properly
+            else if ((ld_state && !pkt_valid && !fifo_full) || (laf_state && low_packet_valid && !parity_done)) 
                 parity_done <= 1'b1;
             
-            // received_crc
             if (ld_state && !pkt_valid) received_crc <= data_in; 
         end
     end
@@ -206,13 +187,7 @@ module register_crc8 (
         end
     end
 
-    // -------------------------------------------------------------------------
-    // OUTPUT ASSIGNMENTS (Keeping your exact port signatures)
-    // -------------------------------------------------------------------------
     assign crc_out = crc_value;
-    
-    // We keep the ports to match your Top module perfectly, 
-    // but wire them cleanly since Hamming logic will handle actual correction.
     assign error_corrected = 1'b0;     
     assign corrected_data = dout;      
 

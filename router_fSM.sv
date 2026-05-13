@@ -1,24 +1,4 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 23.03.2026 21:09:44
-// Design Name: 
-// Module Name: router_fSM
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
 
 module router_fsm (
     input  logic       clock,
@@ -39,13 +19,14 @@ module router_fsm (
     output logic       detect_add,
     output logic       ld_state,
     output logic       lfd_state,
+    output logic       laf_state,
     output logic       full_state,
     output logic       rst_int_reg,
     output logic       busy
 );
 
     // -------------------------------------------------------------------------
-    // 1. STATE DEFINITIONS (7 Standard States of a 1x3 Router)
+    // 1. STATE DEFINITIONS (Upgraded to 8 States for 100% Data Integrity)
     // -------------------------------------------------------------------------
     typedef enum logic [2:0] {
         DECODE_ADDRESS     = 3'b000,
@@ -54,13 +35,13 @@ module router_fsm (
         LOAD_DATA          = 3'b011,
         LOAD_PARITY        = 3'b100,
         FIFO_FULL_STATE    = 3'b101,
-        CHECK_PARITY_ERROR = 3'b110
+        CHECK_PARITY_ERROR = 3'b110,
+        LOAD_AFTER_FULL    = 3'b111  // <-- NEW STATE ADDED HERE
     } state_t;
 
     state_t present_state, next_state;
     
     // Internal register to remember the address 
-    // (because data_in changes after the first clock cycle)
     logic [1:0] addr;
 
     // -------------------------------------------------------------------------
@@ -71,19 +52,18 @@ module router_fsm (
             addr <= 2'b11; // 11 means invalid
         end
         else if ((present_state == DECODE_ADDRESS) && pkt_valid) begin
-            addr <= data_in; // Save destination address (00, 01, or 10)
+            addr <= data_in; // Save destination address
         end
     end
 
     // -------------------------------------------------------------------------
-    // 3. STATE REGISTER (Sequential)
+    // 3. STATE REGISTER
     // -------------------------------------------------------------------------
     always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             present_state <= DECODE_ADDRESS;
         end
         else if (soft_reset_0 || soft_reset_1 || soft_reset_2) begin
-            // Agar koi timeout hota hai, router reset ho ke idle me chala jaye
             present_state <= DECODE_ADDRESS; 
         end
         else begin
@@ -92,22 +72,20 @@ module router_fsm (
     end
 
     // -------------------------------------------------------------------------
-    // 4. NEXT STATE LOGIC (Combinational)
+    // 4. NEXT STATE LOGIC
     // -------------------------------------------------------------------------
     always_comb begin
-        next_state = present_state; // Default: Stay in current state
+        next_state = present_state; 
 
         case (present_state)
             
             DECODE_ADDRESS: begin
                 if (pkt_valid) begin
-                    // Check if addressed FIFO is empty
                     if ((data_in == 2'b00 && fifo_empty_0) ||
                         (data_in == 2'b01 && fifo_empty_1) ||
                         (data_in == 2'b10 && fifo_empty_2)) begin
                         next_state = LOAD_FIRST_DATA;
                     end
-                    // If addressed FIFO is NOT empty, wait!
                     else if ((data_in == 2'b00 && !fifo_empty_0) ||
                              (data_in == 2'b01 && !fifo_empty_1) ||
                              (data_in == 2'b10 && !fifo_empty_2)) begin
@@ -117,7 +95,6 @@ module router_fsm (
             end
 
             WAIT_TILL_EMPTY: begin
-                // Check the latched address, if it's empty now, proceed
                 if ((addr == 2'b00 && fifo_empty_0) ||
                     (addr == 2'b01 && fifo_empty_1) ||
                     (addr == 2'b10 && fifo_empty_2)) begin
@@ -126,41 +103,52 @@ module router_fsm (
             end
 
             LOAD_FIRST_DATA: begin
-                next_state = LOAD_DATA; // Always move to LOAD_DATA next
+                next_state = LOAD_DATA;
             end
 
             LOAD_DATA: begin
                 if (fifo_full) begin
-                    next_state = FIFO_FULL_STATE; // Emergency pause!
+                    next_state = FIFO_FULL_STATE; // Jump to FULL state
                 end
                 else if (!fifo_full && !pkt_valid) begin
-                    next_state = LOAD_PARITY;     // Data done, go check CRC
+                    next_state = LOAD_PARITY;     // Data finished, go to parity
                 end
                 else begin
-                    next_state = LOAD_DATA;       // Keep loading data
+                    next_state = LOAD_DATA;       // Continue loading
                 end
             end
 
             FIFO_FULL_STATE: begin
-                // Once FIFO has space again, resume where we left off
                 if (!fifo_full) begin
-                    if (pkt_valid)
-                        next_state = LOAD_DATA;
-                    else
-                        next_state = LOAD_PARITY;
+                    // UPDATED: Do not go to LOAD_DATA directly! Go to LOAD_AFTER_FULL
+                    next_state = LOAD_AFTER_FULL;
+                end
+            end
+
+            // -----------------------------------------------------------------
+            // NEW STATE LOGIC: Handles the data left on the bus during backpressure
+            // -----------------------------------------------------------------
+            LOAD_AFTER_FULL: begin
+                if (!parity_done && !low_packet_valid) begin
+                    next_state = LOAD_DATA;
+                end
+                else if (!parity_done && low_packet_valid) begin
+                    next_state = LOAD_PARITY;
+                end
+                else if (parity_done) begin
+                    next_state = DECODE_ADDRESS;
                 end
             end
 
             LOAD_PARITY: begin
-                next_state = CHECK_PARITY_ERROR; // Unconditional jump
+                next_state = CHECK_PARITY_ERROR;
             end
 
             CHECK_PARITY_ERROR: begin
-                // Router decides what to do after checking error
                 if (fifo_full)
                     next_state = FIFO_FULL_STATE;
                 else
-                    next_state = DECODE_ADDRESS; // Ready for next packet!
+                    next_state = DECODE_ADDRESS;
             end
             
             default: next_state = DECODE_ADDRESS;
@@ -168,7 +156,7 @@ module router_fsm (
     end
 
     // -------------------------------------------------------------------------
-    // 5. OUTPUT ASSIGNMENTS (Control Signals for Datapath & Sync)
+    // 5. OUTPUT ASSIGNMENTS
     // -------------------------------------------------------------------------
     
     assign detect_add    = (present_state == DECODE_ADDRESS);
@@ -176,20 +164,20 @@ module router_fsm (
     assign ld_state      = (present_state == LOAD_DATA);
     assign full_state    = (present_state == FIFO_FULL_STATE);
     assign rst_int_reg   = (present_state == CHECK_PARITY_ERROR);
-    
-    // Write Enable goes HIGH when we are actively putting Header, Data, or CRC into FIFO
+    assign laf_state  = (present_state == LOAD_AFTER_FULL);
+    // UPDATED: Write enable must also be HIGH during LOAD_AFTER_FULL to latch pending byte
     assign write_enb_reg = ((present_state == LOAD_DATA) || 
                             (present_state == LOAD_PARITY) || 
-                            (present_state == LOAD_FIRST_DATA));
+                            (present_state == LOAD_FIRST_DATA) ||
+                            (present_state == LOAD_AFTER_FULL));
     
-    // Busy is HIGH when FSM is processing a packet and CANNOT accept a NEW header.
-    // Sender tool looks at 'busy' before sending a new packet.
+    // UPDATED: FSM is also busy during LOAD_AFTER_FULL
     assign busy = ((present_state == LOAD_FIRST_DATA) || 
                    (present_state == LOAD_PARITY) || 
                    (present_state == FIFO_FULL_STATE) || 
+                   (present_state == LOAD_AFTER_FULL) ||
                    (present_state == WAIT_TILL_EMPTY) || 
                    (present_state == CHECK_PARITY_ERROR) ||
-                   // Latch condition: If it's DECODE_ADDRESS but we just started a packet
                    (present_state == DECODE_ADDRESS && pkt_valid));
 
 endmodule
