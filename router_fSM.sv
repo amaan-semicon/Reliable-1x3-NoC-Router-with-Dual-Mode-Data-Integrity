@@ -25,9 +25,9 @@ module router_fsm (
     output logic       busy
 );
 
-    // -------------------------------------------------------------------------
-    // 1. STATE DEFINITIONS (Upgraded to 8 States for 100% Data Integrity)
-    // -------------------------------------------------------------------------
+  
+    // 1. STATE DEFINITIONS
+
     typedef enum logic [2:0] {
         DECODE_ADDRESS     = 3'b000,
         WAIT_TILL_EMPTY    = 3'b001,
@@ -44,9 +44,9 @@ module router_fsm (
     // Internal register to remember the address 
     logic [1:0] addr;
 
-    // -------------------------------------------------------------------------
+   
     // 2. ADDRESS LATCH LOGIC
-    // -------------------------------------------------------------------------
+   
     always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             addr <= 2'b11; // 11 means invalid
@@ -56,10 +56,8 @@ module router_fsm (
         end
     end
 
-    // -------------------------------------------------------------------------
-    // 3. STATE REGISTER
-    // -------------------------------------------------------------------------
-    always_ff @(posedge clock or negedge resetn) begin
+       // 3. STATE REGISTER
+       always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             present_state <= DECODE_ADDRESS;
         end
@@ -71,10 +69,9 @@ module router_fsm (
         end
     end
 
-    // -------------------------------------------------------------------------
+    
     // 4. NEXT STATE LOGIC
-    // -------------------------------------------------------------------------
-    always_comb begin
+       always_comb begin
         next_state = present_state; 
 
         case (present_state)
@@ -125,9 +122,8 @@ module router_fsm (
                 end
             end
 
-            // -----------------------------------------------------------------
             // NEW STATE LOGIC: Handles the data left on the bus during backpressure
-            // -----------------------------------------------------------------
+            
             LOAD_AFTER_FULL: begin
                 if (!parity_done && !low_packet_valid) begin
                     next_state = LOAD_DATA;
@@ -155,9 +151,9 @@ module router_fsm (
         endcase
     end
 
-    // -------------------------------------------------------------------------
+  
     // 5. OUTPUT ASSIGNMENTS
-    // -------------------------------------------------------------------------
+  
     
     assign detect_add    = (present_state == DECODE_ADDRESS);
     assign lfd_state     = (present_state == LOAD_FIRST_DATA);
