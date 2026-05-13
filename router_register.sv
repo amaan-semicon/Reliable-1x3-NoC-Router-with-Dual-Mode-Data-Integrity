@@ -9,7 +9,7 @@ module register_crc8 (
     input  logic       detect_add,
     input  logic       ld_state,
     input  logic       full_state,
-    input  logic       laf_state,          // <-- ADDED THIS BACK FOR 8-STATE FSM
+    input  logic       laf_state,          
     input  logic       lfd_state,
     input  logic       rst_int_reg,
     input  logic       parity_mode,        // 0: CRC-8 mode, 1: Parity mode
@@ -30,7 +30,7 @@ module register_crc8 (
     logic [7:0] received_crc;
     logic [7:0] lookup_index;
 
-    // CRC-8 Lookup Table (Same as your code)
+    // CRC-8 Lookup Table 
     logic [7:0] crc8_table [0:255] = '{
         8'h00, 8'h07, 8'h0E, 8'h09, 8'h1C, 8'h1B, 8'h12, 8'h15,
         8'h38, 8'h3F, 8'h36, 8'h31, 8'h24, 8'h23, 8'h2A, 8'h2D,
@@ -66,10 +66,9 @@ module register_crc8 (
         8'hE6, 8'hE1, 8'hE8, 8'hEF, 8'hFA, 8'hFD, 8'hF4, 8'hF3
     };
 
-    // -------------------------------------------------------------------------
-    // DOUT LOGIC (Now correctly uses laf_state)
-    // -------------------------------------------------------------------------
-    always_ff @(posedge clock or negedge resetn) begin
+ 
+    // DOUT LOGIC
+      always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             dout <= 8'h00;
         end
@@ -90,10 +89,8 @@ module register_crc8 (
         end
     end
 
-    // -------------------------------------------------------------------------
-    // HEADER & FULL_STATE_BYTE
-    // -------------------------------------------------------------------------
-    always_ff @(posedge clock or negedge resetn) begin
+        // HEADER & FULL_STATE_BYTE
+       always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             header <= 8'h00;
             full_state_byte <= 8'h00;
@@ -109,9 +106,9 @@ module register_crc8 (
         end
     end
 
-    // -------------------------------------------------------------------------
+    
     // CRC & PARITY CALCULATION (Now calculates for laf_state too)
-    // -------------------------------------------------------------------------
+  
     always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             crc_value <= 8'h00;
@@ -141,9 +138,9 @@ module register_crc8 (
         end
     end
 
-    // -------------------------------------------------------------------------
+  
     // FSM HELPER SIGNALS 
-    // -------------------------------------------------------------------------
+   
     always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             low_packet_valid <= 1'b0;
@@ -163,9 +160,9 @@ module register_crc8 (
         end
     end
 
-    // -------------------------------------------------------------------------
+    
     // ERROR DETECTION VERDICT
-    // -------------------------------------------------------------------------
+  
     always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             err <= 1'b0;
