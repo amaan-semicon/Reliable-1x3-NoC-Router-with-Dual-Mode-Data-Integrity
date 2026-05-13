@@ -26,15 +26,14 @@ module router_sync (
     output logic       soft_reset_2 
 );
 
-    // -------------------------------------------------------------------------
+
     // INTERNAL REGISTERS
-    // -------------------------------------------------------------------------
+
     logic [1:0] int_addr_reg;
     logic [4:0] timer_0, timer_1, timer_2; // 5-bit timers for 30-cycle timeout
 
-    // -------------------------------------------------------------------------
-    // 1. ADDRESS LATCHING LOGIC
-    // -------------------------------------------------------------------------
+   // 1. ADDRESS LATCHING LOGIC
+
     always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             int_addr_reg <= 2'b11; // 11 is invalid default address
@@ -44,9 +43,8 @@ module router_sync (
         end
     end
 
-    // -------------------------------------------------------------------------
-    // 2. FIFO FULL ROUTING LOGIC (Mux to FSM)
-    // -------------------------------------------------------------------------
+  // 2. FIFO FULL ROUTING LOGIC (Mux to FSM)
+
     always_comb begin
         case (int_addr_reg)
             2'b00: fifo_full = full_0;
@@ -56,9 +54,9 @@ module router_sync (
         endcase
     end
 
-    // -------------------------------------------------------------------------
+
     // 3. WRITE ENABLE DEMUX LOGIC (Route FSM req to correct FIFO)
-    // -------------------------------------------------------------------------
+
     always_comb begin
         // Default assignment to avoid latches
         write_enb = 3'b000; 
@@ -73,18 +71,17 @@ module router_sync (
         end
     end
 
-    // -------------------------------------------------------------------------
+
     // 4. VALID SYNC LOGIC (Tell receivers data is ready)
-    // -------------------------------------------------------------------------
+
     // If FIFO is not empty, data is valid to be read
     assign vld_sync_0 = ~empty_0;
     assign vld_sync_1 = ~empty_1;
     assign vld_sync_2 = ~empty_2;
 
-    // -------------------------------------------------------------------------
+
     // 5. SOFT RESET LOGIC (30 Clock Cycle Timeouts)
-    // -------------------------------------------------------------------------
-    // Timer 0
+   // Timer 0
     always_ff @(posedge clock or negedge resetn) begin
         if (!resetn) begin
             timer_0 <= 5'd0;
